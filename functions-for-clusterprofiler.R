@@ -1,0 +1,26 @@
+run_ego <- function(gene, ont, pvalueCutoff = 0.05, nCluster = null) {
+  d <- godata('org.Mm.eg.db', ont = ont)
+  ego <- enrichGO(gene = names(deg.sig.gene.list), OrgDb = org.Mm.eg.db, keyType = "SYMBOL", ont = ont, pvalueCutoff = 0.05)
+  ego@result[ego@result$pvalue %>% order,]
+  ego <- pairwise_termsim(ego, semData = d, showCategory = dim(ego@result)[1])
+  p <- emapplot_cluster(ego, showCategory = dim(ego@result)[1], repel = T, cluster_num_label = T, cex_label_group = 2)
+  p <- p + xlim(min(p$data$x)-1,max(p$data$x)+1) +ylim(min(p$data$y)-1,max(p$data$y)+1)
+  p
+  
+  go_cls_list <- list()
+  for (i in sort(unique(p$data$color))) {
+    pp <- p$data[p$data$color==i,][,c(3, 4, 5)]
+    colnames(pp) <- c(paste0("Cluster ",i," GO terms"), "Size", "p-Value")
+    pp <- pp[order(pp$Size, decreasing = T), ]
+    rownames(pp) <- NULL
+    print(pp)
+    go_cls_list[paste0("Cluster ",i," GO terms")] <- pp
+    write.csv(pp, file = paste0(ont, "_GO_cluster_",i ,".csv"))
+  }
+  
+  r <- list()
+  r[["enrichGO"]] <- ego
+  r[["p.GOcluster"]] <- p
+  r[["list.GOcluster"]] <- go_cls_list
+  return(r)
+}
