@@ -35,6 +35,7 @@ run_emap_w_ego_termsim <- function(ego, d, pvalueCutoff = 0.05, nCluster = NULL,
   require(enrichplot)
   require(clusterProfiler)
   require(ggplot2)
+  require(clusterProfiler.dplyr)
   
   if(is.null(showCategory)) { showCategory <- dim(ego@result)[1] }
   
@@ -61,10 +62,10 @@ run_emap_w_ego_termsim <- function(ego, d, pvalueCutoff = 0.05, nCluster = NULL,
   return(r)
 }
 
-draw_gene_network <- function(d, deg.sig.gene.list, cluster.num, plot.margin = 2, ) {
-  go_cls_list <- r.BP$list.GOcluster
-  
-  d  %>% slice(grep(paste(go_cls_list[cluster.num] %>% unlist, collapse = "|"), d@result$Description)) %>% cnetplot(circular = F, colorEdge = T, cex_label_gene = 1.2, node_label = "gene", layout = "dh", foldChange = deg.sig.gene.list, cex_category = 1.5, showCategory = 5) -> cp
+draw_gene_network <- function(run_empa_r, deg.sig.gene.list, cluster.num, plot.margin = 2) {
+  go_cls_list <- run_empa_r$list.GOcluster
+  d <- run_empa_r$enrichGO
+  d %>% clusterProfiler.dplyr::slice(grep(paste(go_cls_list[cluster.num] %>% unlist, collapse = "|"), d@result$Description)) %>% cnetplot(circular = F, colorEdge = T, cex_label_gene = 1.2, node_label = "gene", layout = "dh", foldChange = deg.sig.gene.list, cex_category = 1.5, showCategory = 5) -> cp
   cp <- cp + xlim(min(cp$data$x)-plot.margin, max(cp$data$x)+plot.margin) +ylim(min(cp$data$y)-plot.margin, max(cp$data$y)+plot.margin) + 
     ggtitle(paste0("Gene Network of GO Cluster ", cluster.num)) + 
     theme(plot.title = element_text(size = 30, hjust = 0.5)) +
