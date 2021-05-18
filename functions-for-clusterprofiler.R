@@ -73,3 +73,119 @@ draw_gene_network <- function(run_empa_r, deg.sig.gene.list, cluster.num, plot.m
   cp <- cp + theme(legend.title = element_text(size = 20, face = "bold"), legend.margin = margin(r = 10, l = 10), legend.text = element_text(size = 18))
   cp
 }
+
+## https://github.com/YuLab-SMU/DOSE/blob/master/R/gsea.R
+## GSEA algorithm (Subramanian et al. PNAS 2005)
+## INPUTs to GSEA
+## 1. Expression data set D with N genes and k samples.
+## 2. Ranking procedure to produce Gene List L.
+## Includes a correlation (or other ranking metric)
+## and a phenotype or profile of interest C.
+## 3. An exponent p to control the weight of the step.
+## 4. Independently derived Gene Set S of N_H genes (e.g., a pathway).
+## Enrichment Score ES.
+## 2. Evaluate the fraction of genes in S ("hits") weighted
+## by their correlation and the fraction of genes not in S ("miss")
+## present up to a given position i in L.
+gseaScores <- function(geneList, geneSet, leading.edge, exponent=1, fortify=FALSE) {
+  ###################################################################
+  ##    geneList                                                   ##
+  ##                                                               ##
+  ## 1. Rank order the N genes in D to form L = { g_1, ... , g_N}  ##
+  ##    according to the correlation, r(g_j)=r_j,                  ##
+  ##    of their expression profiles with C.                       ##
+  ##                                                               ##
+  ###################################################################
+  
+  ###################################################################
+  ##    exponent                                                   ##
+  ##                                                               ##
+  ## An exponent p to control the weight of the step.              ##
+  ##   When p = 0, Enrichment Score ( ES(S) ) reduces to           ##
+  ##   the standard Kolmogorov-Smirnov statistic.                  ##
+  ##   When p = 1, we are weighting the genes in S                 ##
+  ##   by their correlation with C normalized                      ##
+  ##   by the sum of the correlations over all of the genes in S.  ##
+  ##                                                               ##
+  ###################################################################
+  
+  ## genes defined in geneSet should appear in geneList.
+  ## this is a must, see https://github.com/GuangchuangYu/DOSE/issues/23
+  geneSet <- intersect(geneSet, names(geneList))
+  
+  N <- length(geneList)
+  Nh <- length(geneSet)
+  
+  Phit <- Pmiss <- numeric(N)
+  hits <- names(geneList) %in% geneSet ## logical
+  
+  Phit[hits] <- abs(geneList[hits])^exponent
+  NR <- sum(Phit)
+  Phit <- cumsum(Phit/NR)
+  
+  Pmiss[!hits] <-  1/(N-Nh)
+  Pmiss <- cumsum(Pmiss)
+  
+  runningES <- Phit - Pmiss
+  
+  ## ES is the maximum deviation from zero of Phit-Pmiss
+  max.ES <- max(runningES)
+  min.ES <- min(runningES)
+  if( abs(max.ES) > abs(min.ES) ) {
+    ES <- max.ES
+  } else {
+    ES <- min.ES
+  }
+  
+  leading.genes <- unlist(strsplit(leading.edge, "/"))
+  print(length(leading.genes))
+  #leading.genes <- ifelse(length(leading.genes)<40, leading.genes, leading.genes[1:40])
+  #print(leading.genes)
+  
+  df <- data.frame(x=seq_along(runningES),
+                   runningScore=runningES,
+                   position=as.integer(hits),
+                   gene.name=names(geneList),
+                   leading.edge=names(geneList) %in% leading.genes[1:40]
+  )
+  
+  if(fortify==TRUE) {
+    return(df)
+  }
+  
+  df$gene = names(geneList)
+  res <- list(ES=ES, runningES = df)
+  return(res)
+}
+
+## https://github.com/YuLab-SMU/enrichplot/blob/master/R/gseaplot.R
+##' extract gsea result of selected geneSet
+##'
+##'
+##' @title gsInfo
+##' @param object gseaResult object
+##' @param geneSetID gene set ID
+##' @return data.frame
+##' @author Guangchuang Yu
+## @export
+gsInfo <- function(object, geneSetID) {
+  geneList <- object@geneList
+  
+  if (is.numeric(geneSetID))
+    geneSetID <- object@result[geneSetID, "ID"]
+  
+  geneSet <- object@geneSets[[geneSetID]]
+  exponent <- object@params[["exponent"]]
+  leading.edge <- object@result[geneSetID,]$core_enrichment
+  df <- gseaScores(geneList, geneSet, leading.edge, exponent, fortify=TRUE)
+  df$ymin <- 0
+  df$ymax <- 0
+  pos <- df$position == 1
+  h <- diff(range(df$runningScore))/20
+  df$ymin[pos] <- -h
+  df$ymax[pos] <- h
+  df$geneList <- geneList
+  
+  df$Description <- object@result[geneSetID, "Description"]
+  return(df)
+}
